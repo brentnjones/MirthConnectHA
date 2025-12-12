@@ -76,5 +76,11 @@ oc apply -f pgadmin.yaml
 image: image-registry.openshift-image-registry.svc:5000/mirth-connect-ha/mirth-connect:latest
 image: docker.io/nextgenhealthcare/connect
 
+---------------------------------------------
+
+Horizontal Pod Autoscaler (HPA) - Metric-Based
+
+oc apply -f mirth-connect-hpa.yaml
+
 
  
