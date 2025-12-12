@@ -1,0 +1,37 @@
+# First login with oc
+   oc login --token=sha256~Tyg8DsH-b266JIAul3qN1rgw-W9VQnRBCBD1lYacf-k --server=https://api.rosa-7vjnf.vmzc.p3.openshiftapps.com:443
+
+# Create a new project
+   oc new-project mirth-connect-ha
+
+# Setup internal registry
+   oc patch configs.imageregistry.operator.openshift.io/cluster --type merge -p '{"spec":{"defaultRoute":true}}'
+   REGISTRY=$(oc get route default-route -n openshift-image-registry --template='{{ .spec.host }}')
+   PROJECT=$(oc project -q)
+   IMAGE=$REGISTRY/$PROJECT/mirth-connect:latest
+
+# Authenticate podman to registry
+   TOKEN=$(oc whoami -t)
+   podman login --tls-verify=false -u openshift -p $TOKEN $REGISTRY
+
+# Load the local image from disk
+# After running podman load -i mirth-connect.tar, podman will display the image name and tag it loaded 
+# (e.g., Loaded image: my-mirth-connect:latest).
+# Use that image name in the tag command.
+    podman load -i mirth-connect.tar
+
+# Tag the image:
+    podman tag <original-image-name> $REGISTRY/mirth-connect-ha/mirth-connect:latest
+
+# Push the image to OpenShift image registry
+    podman push --tls-verify=false $REGISTRY/mirth-connect-ha/mirth-connect:latest
+
+# Update your deployment YAML to use your private image and apply as before.
+# Change:
+    image: docker.io/nextgenhealthcare/connect
+# To:
+    image: image-registry.openshift-image-registry.svc:5000/mirth-connect-ha/mirth-connect:latest
+
+# Redeploy application
+    oc apply -f mirth-connect.yaml
+    

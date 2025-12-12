@@ -1,0 +1,80 @@
+# First login with oc
+   oc login --token=sha256~Tyg8DsH-b266JIAul3qN1rgw-W9VQnRBCBD1lYacf-k --server=https://api.rosa-7vjnf.vmzc.p3.openshiftapps.com:443
+
+# Create a new project
+   oc new-project mirth-connect-ha
+
+# Setup internal registry
+   oc patch configs.imageregistry.operator.openshift.io/cluster --type merge -p '{"spec":{"defaultRoute":true}}'
+   
+# Wait for the route to be created (may take 30-60 seconds)
+   echo "Waiting for registry route to be created..."
+   until oc get route default-route -n openshift-image-registry &> /dev/null; do sleep 5; done
+   
+   REGISTRY=$(oc get route default-route -n openshift-image-registry --template='{{ .spec.host }}')
+   PROJECT=$(oc project -q)
+
+# Authenticate podman to registry
+   TOKEN=$(oc whoami -t)
+   podman login --tls-verify=false -u openshift -p $TOKEN $REGISTRY
+
+# Build and push the image (use --no-cache for fresh packages):
+   podman build --no-cache -t $IMAGE .
+   podman push --tls-verify=false $IMAGE
+
+# Create Service Account
+oc create serviceaccount mirth-connect-sa
+   
+
+# Create the custom scc
+   oc apply -f mirth-connect-scc.yaml
+
+# Add scc to service Account
+   oc adm policy add-scc-to-user mirth-connect-scc -z mirth-connect-sa -n mirth-connect-ha
+
+# Add role to user to allow image pulls from registry
+   oc policy add-role-to-user system:image-puller system:serviceaccount:mirth-connect-ha:mirth-connect-sa -n mirth-connect-ha
+
+# Deploy postgres database with secret and service
+   oc apply -f postgres-cluster.yaml
+
+# Deploy to local cluster or to AWS
+   oc apply -f mirth-connect.yaml      # local
+   oc apply -f mirth-connect-aws.yaml  # aws
+
+# Create application service and route
+   oc apply -f mirth-connect-service-route.yaml
+
+# Confirm UID in debug container.
+   # id mirth
+   # uid=1000(mirth) gid=1000(ubuntu) groups=1000(ubuntu),4(adm),20(dialout),24(cdrom),25(floppy),27(sudo),29(audio),30(dip),44(video),46(plugdev),1001(mirth)
+
+# Restart the deployment:
+   oc rollout restart deployment/mirth-connect
+   oc rollout status deployment/mirth-connect
+
+
+The default Mirth Connect credentials are:
+
+Username: admin
+Password: admin
+
+oc get secret my-postgres-cluster-pguser-postgres -n mirth-connect-ha -o jsonpath="{.data.password}" | base64 --decode
+
+
+---------------------------------------------
+
+pgAdmin
+
+oc create serviceaccount pgadmin-sa
+
+oc adm policy add-scc-to-user anyuid -z pgadmin-sa
+
+oc apply -f pgadmin.yaml
+
+
+image: image-registry.openshift-image-registry.svc:5000/mirth-connect-ha/mirth-connect:latest
+image: docker.io/nextgenhealthcare/connect
+
+
+ 
