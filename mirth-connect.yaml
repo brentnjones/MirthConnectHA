@@ -32,7 +32,7 @@ spec:
         - name: DATABASE_USERNAME
           value: "postgres"
         - name: DATABASE_PASSWORD
-          value: ";B}RaF(*_LD-SQs=8-u==ZdF"
+          value: "IoybotU>i|EwHT,;3D=W]:DB"
         resources:
           requests:
             memory: "512Mi"
